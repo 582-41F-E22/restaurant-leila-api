@@ -52,6 +52,47 @@ function ajouter($pdo, $platJson) {
     return json_encode(["id" => $pdo->lastInsertId()]);
 }
 
+function retirer($pdo, $id) {
+    $reqParamPDO = $pdo->prepare("DELETE FROM plat WHERE pla_id=:id");
+    $reqParamPDO->execute(['id'=>$id]);
+    return json_encode(["nombreEnregistrementsAffectes" => $reqParamPDO->rowCount()]);
+}
+
+function remplacer($pdo, $id, $platMod) {
+    $plat = json_decode($platMod);
+    $reqParamPDO = $pdo->prepare("UPDATE plat SET 
+        pla_nom='{$plat->nom}', 
+        pla_detail='{$plat->detail}', 
+        pla_prix={$plat->prix}, 
+        pla_portion={$plat->portion}, 
+        pla_cat_id_ce={$plat->categorie}
+        WHERE pla_id=:id");
+    $reqParamPDO->execute(['id'=>$id]);
+    return json_encode(["nombreEnregistrementsAffectes" => $reqParamPDO->rowCount()]);
+}
+
+/*
+    $changement devrait ressembler à : 
+    // Payload du corps du message HTTP
+    {
+        "pla_prix": 50,
+        "pla_detail": "Nouveau détail pour ce plat"
+    }
+*/
+function changer($pdo, $id, $changement) {
+    $champsAModifier = json_decode($changement, true);
+    $fragmentSql = "";
+    // Assainir les noms des colonnes !!!! Sinon, injection de code possible...
+    foreach ($champsAModifier as $colonne => $nouvelleValeur) {
+        $fragmentSql .= "$colonne=:$colonne,";
+    }
+    $fragmentSql = rtrim($fragmentSql, ',');
+    $reqParamPDO = $pdo->prepare("UPDATE plat SET {$fragmentSql} WHERE pla_id=:id");
+    echo "UPDATE plat SET {$fragmentSql} WHERE pla_id=:id";
+    // Remarquez l'utilisation du "spread operator"
+    $reqParamPDO->execute(['id'=>$id, ...$champsAModifier]);
+    return json_encode(["nombreEnregistrementsAffectes" => $reqParamPDO->rowCount()]);
+}
 
 /*
     GET /plats --------------> echo tout($pdo)
@@ -60,19 +101,32 @@ function ajouter($pdo, $platJson) {
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
+        // Exemple URL de la requête : /plats
         echo tout($pdo);
         break;
     case 'POST':
+        // Exemple URL de la requête : /plats
         // Récupérer le corps du message HTTP
         $postBody = file_get_contents('php://input');
         echo ajouter($pdo, $postBody);
         break;
     case 'PUT':
-        # code...
+        // Exemple URL de la requête : /plats/{idPlat}
+        $postBody = file_get_contents('php://input');
+        // Remplacer toutes les propriétés de l'entité sauf l'identifiant
+        echo remplacer($pdo, 4, $postBody);
         break;
     case 'DELETE':
-        # code...
+        // Exemple URL de la requête : /plats/{idPlat}
+        echo retirer($pdo, 11);
         break;
+    case 'PATCH':
+        // Exemple URL de la requête : /plats/{idPlat}
+        $postBody = file_get_contents('php://input');
+        // Remplacer toutes les propriétés de l'entité sauf l'identifiant
+        echo changer($pdo, 1, $postBody);
+        break;
+    
     default:
         # code...
         break;
